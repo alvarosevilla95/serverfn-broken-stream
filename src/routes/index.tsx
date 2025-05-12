@@ -1,16 +1,18 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 
 export const fetchStream = createServerFn({
-  method: "GET",
+  method: "POST",
   response: "raw",
 }).handler(async () => {
   const messages = ["first", "second", "third"];
   const encoder = new TextEncoder();
+
   const stream = new ReadableStream({
     start(controller) {
       let index = 0;
+
       const interval = setInterval(() => {
-        console.log("sending", messages[index]);
         controller.enqueue(encoder.encode(`${messages[index++]}\n`));
         if (index === messages.length) {
           clearInterval(interval);
@@ -19,6 +21,7 @@ export const fetchStream = createServerFn({
       }, 1_000);
     },
   });
+
   return new Response(stream, {
     status: 200,
     headers: {
@@ -28,12 +31,14 @@ export const fetchStream = createServerFn({
   });
 });
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/")({
   component: Home,
 });
 
 const onClick = async () => {
+  console.log("req");
   const res = await fetchStream();
+  console.log("res status:", res.status);
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   while (true) {
