@@ -1,31 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 
-export const fetchStream = createServerFn({
-  method: "GET",
-  response: "raw",
-}).handler(async () => {
-  const messages = ["first", "second", "third"];
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(controller) {
-      let index = 0;
-      const interval = setInterval(() => {
-        console.log("sending", messages[index]);
-        controller.enqueue(encoder.encode(`${messages[index++]}\n`));
-        if (index === messages.length) {
-          clearInterval(interval);
-          controller.close();
-        }
-      }, 1_000);
-    },
-  });
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-    },
-  });
+export const doWork = createServerFn({
+  method: "POST",
+}).handler(async ({ signal }) => {
+  console.log("signal on start", signal.aborted);
+  signal.onabort = () => {
+    console.log("signal aborted");
+  };
+  // wait more to ensure signal has been aborted
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  console.log("signal before return", signal.aborted);
+  return "hello";
 });
 
 export const Route = createFileRoute({
@@ -33,21 +18,20 @@ export const Route = createFileRoute({
 });
 
 const onClick = async () => {
-  const res = await fetchStream();
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    console.log("chunk", decoder.decode(value));
-  }
-  console.log("stream closed");
+  const controller = new AbortController();
+  console.log("Calling serverfn");
+  doWork({ signal: controller.signal });
+  console.log("signal status", controller.signal.aborted);
+  // wait a bit before aborting
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  controller.abort();
+  console.log("signal status after abort", controller.signal.aborted);
 };
 
 function Home() {
   return (
     <div className="p-2">
-      <button onClick={onClick}>Fetch Stream</button>
+      <button onClick={onClick}>Trigger function</button>
     </div>
   );
 }
